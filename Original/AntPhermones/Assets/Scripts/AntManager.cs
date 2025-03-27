@@ -4,218 +4,302 @@ using UnityEngine;
 
 public class AntManager : MonoBehaviour {
 	public Material basePheromoneMaterial;
+		// 蚂蚁信息素渲染器
 	public Renderer pheromoneRenderer;
+	// 蚂蚁材质
 	public Material antMaterial;
+	// 障碍物材质
 	public Material obstacleMaterial;
+	// 资源材质
 	public Material resourceMaterial;
+	// 殖民地材质
 	public Material colonyMaterial;
+	// 蚂蚁模型网格
 	public Mesh antMesh;
+	// 障碍物模型网格
 	public Mesh obstacleMesh;
+	// 殖民地模型网格
 	public Mesh colonyMesh;
+	// 资源模型网格
 	public Mesh resourceMesh;
+	// 搜索颜色
 	public Color searchColor;
+	// 携带颜色
 	public Color carryColor;
+	// 蚂蚁数量
 	public int antCount;
+	// 地图大小
 	public int mapSize = 128;
+	// 桶的分辨率
 	public int bucketResolution;
+	// 蚂蚁尺寸
 	public Vector3 antSize;
+	// 蚂蚁速度
 	public float antSpeed;
+	// 蚂蚁加速度，范围在0到1之间
 	[Range(0f,1f)]
 	public float antAccel;
+	// 信息素添加速度
 	public float trailAddSpeed;
+	// 信息素衰减率，范围在0到1之间
 	[Range(0f,1f)]
 	public float trailDecay;
+	// 随机操控性
 	public float randomSteering;
+	// 信息素操控强度
 	public float pheromoneSteerStrength;
+	// 墙壁操控强度
 	public float wallSteerStrength;
+	// 目标操控强度
 	public float goalSteerStrength;
+	// 外向强度
 	public float outwardStrength;
+	// 内向强度
 	public float inwardStrength;
+	// 旋转分辨率
 	public int rotationResolution = 360;
+	// 障碍物环数
 	public int obstacleRingCount;
+	// 每环障碍物比例，范围在0到1之间
 	[Range(0f,1f)]
 	public float obstaclesPerRing;
+	// 障碍物半径
 	public float obstacleRadius;
-
+	
+	// 信息素纹理
 	Texture2D pheromoneTexture;
+	// 自定义信息素材质
 	Material myPheromoneMaterial;
-
+	
+	// 信息素颜色数组
 	Color[] pheromones;
+	// 蚂蚁数组
 	Ant[] ants;
+	// 矩阵数组
 	Matrix4x4[][] matrices;
+	// 蚂蚁颜色数组
 	Vector4[][] antColors;
+	// 材质属性块数组
 	MaterialPropertyBlock[] matProps;
+	// 障碍物数组
 	Obstacle[] obstacles;
+	// 障碍物矩阵数组
 	Matrix4x4[][] obstacleMatrices;
+	// 障碍物桶数组
 	Obstacle[,][] obstacleBuckets;
-
+	
+	// 资源模型矩阵
 	Matrix4x4 resourceMatrix;
+	// 殖民地模型矩阵
 	Matrix4x4 colonyMatrix;
-
+	
+	// 资源位置
 	Vector2 resourcePosition;
+	// 殖民地位置
 	Vector2 colonyPosition;
-
+	
+	// 每批处理的实例数
 	const int instancesPerBatch = 1023;
-
+	
+	// 旋转矩阵查找表
 	Matrix4x4[] rotationMatrixLookup;
-
+	
+	// 获取旋转矩阵
 	Matrix4x4 GetRotationMatrix(float angle) {
-		angle /= Mathf.PI * 2f;
-		angle -= Mathf.Floor(angle);
-		angle *= rotationResolution;
-		return rotationMatrixLookup[((int)angle)%rotationResolution];
+	    // 角度归一化
+	    angle /= Mathf.PI * 2f;
+	    angle -= Mathf.Floor(angle);
+	    angle *= rotationResolution;
+	    // 返回对应的旋转矩阵
+	    return rotationMatrixLookup[((int)angle)%rotationResolution];
 	}
-
+	
+	// 计算信息素索引
 	int PheromoneIndex(int x, int y) {
-		return x + y * mapSize;
+	    return x + y * mapSize;
 	}
-
+	
+	// 释放信息素
 	void DropPheromones(Vector2 position,float strength) {
-		int x = Mathf.FloorToInt(position.x);
-		int y = Mathf.FloorToInt(position.y);
-		if (x < 0 || y < 0 || x >= mapSize || y >= mapSize) {
-			return;
-		}
-
-		int index = PheromoneIndex(x,y);
-		pheromones[index].r += (trailAddSpeed*strength*Time.fixedDeltaTime)*(1f-pheromones[index].r);
-		if (pheromones[index].r>1f) {
-			pheromones[index].r = 1f;
-		}
+	    int x = Mathf.FloorToInt(position.x);
+	    int y = Mathf.FloorToInt(position.y);
+	    // 检查位置是否有效
+	    if (x < 0 || y < 0 || x >= mapSize || y >= mapSize) {
+	        return;
+	    }
+	
+	    int index = PheromoneIndex(x,y);
+	    // 更新信息素浓度
+	    pheromones[index].r += (trailAddSpeed*strength*Time.fixedDeltaTime)*(1f-pheromones[index].r);
+	    if (pheromones[index].r>1f) {
+	        pheromones[index].r = 1f;
+	    }
 	}
-
+	
+	// 信息素操控
 	float PheromoneSteering(Ant ant,float distance) {
-		float output = 0;
-
-		for (int i=-1;i<=1;i+=2) {
-			float angle = ant.facingAngle + i * Mathf.PI*.25f;
-			float testX = ant.position.x + Mathf.Cos(angle) * distance;
-			float testY = ant.position.y + Mathf.Sin(angle) * distance;
-
-			if (testX <0 || testY<0 || testX>=mapSize || testY>=mapSize) {
-
-			} else {
-				int index = PheromoneIndex((int)testX,(int)testY);
-				float value = pheromones[index].r;
-				output += value*i;
-			}
-		}
-		return Mathf.Sign(output);
+	    float output = 0;
+	
+	    for (int i=-1;i<=1;i+=2) {
+	        float angle = ant.facingAngle + i * Mathf.PI*.25f;
+	        float testX = ant.position.x + Mathf.Cos(angle) * distance;
+	        float testY = ant.position.y + Mathf.Sin(angle) * distance;
+	
+	        if (testX <0 || testY<0 || testX>=mapSize || testY>=mapSize) {
+	
+	        } else {
+	            int index = PheromoneIndex((int)testX,(int)testY);
+	            float value = pheromones[index].r;
+	            output += value*i;
+	        }
+	    }
+	    // 返回操控方向
+	    return Mathf.Sign(output);
 	}
-
+	
+	// 墙壁操控
 	int WallSteering(Ant ant,float distance) {
-		int output = 0;
-
-		for (int i = -1; i <= 1; i+=2) {
-			float angle = ant.facingAngle + i * Mathf.PI*.25f;
-			float testX = ant.position.x + Mathf.Cos(angle) * distance;
-			float testY = ant.position.y + Mathf.Sin(angle) * distance;
-
-			if (testX < 0 || testY < 0 || testX >= mapSize || testY >= mapSize) {
-
-			} else {
-				int value = GetObstacleBucket(testX,testY).Length;
-				if (value > 0) {
-					output -= i;
-				}
-			}
-		}
-		return output;
+	    int output = 0;
+	
+	    for (int i = -1; i <= 1; i+=2) {
+	        float angle = ant.facingAngle + i * Mathf.PI*.25f;
+	        float testX = ant.position.x + Mathf.Cos(angle) * distance;
+	        float testY = ant.position.y + Mathf.Sin(angle) * distance;
+	
+	        if (testX < 0 || testY < 0 || testX >= mapSize || testY >= mapSize) {
+	
+	        } else {
+	            int value = GetObstacleBucket(testX,testY).Length;
+	            if (value > 0) {
+	                output -= i;
+	            }
+	        }
+	    }
+	    // 返回操控方向
+	    return output;
 	}
-
+	
+	// 线性检测
 	bool Linecast(Vector2 point1, Vector2 point2) {
-		float dx = point2.x - point1.x;
-		float dy = point2.y - point1.y;
-		float dist = Mathf.Sqrt(dx * dx + dy * dy);
-
-		int stepCount = Mathf.CeilToInt(dist*.5f);
-		for (int i=0;i<stepCount;i++) {
-			float t = (float)i / stepCount;
-			if (GetObstacleBucket(point1.x+dx*t,point1.y+dy*t).Length>0) {
-				return true;
-			}
-		}
-
-		return false;
+	    float dx = point2.x - point1.x;
+	    float dy = point2.y - point1.y;
+	    float dist = Mathf.Sqrt(dx * dx + dy * dy);
+	
+	    int stepCount = Mathf.CeilToInt(dist*.5f);
+	    for (int i=0;i<stepCount;i++) {
+	        float t = (float)i / stepCount;
+	        if (GetObstacleBucket(point1.x+dx*t,point1.y+dy*t).Length>0) {
+	            return true;
+	        }
+	    }
+	
+	    return false;
 	}
-
-	void GenerateObstacles() {
-		List<Obstacle> output = new List<Obstacle>();
-		for (int i=1;i<=obstacleRingCount;i++) {
-			float ringRadius = (i / (obstacleRingCount+1f)) * (mapSize * .5f);
-			float circumference = ringRadius * 2f * Mathf.PI;
-			int maxCount = Mathf.CeilToInt(circumference / (2f * obstacleRadius) * 2f);
-			int offset = Random.Range(0,maxCount);
-			int holeCount = Random.Range(1,3);
-			for (int j=0;j<maxCount;j++) {
-				float t = (float)j / maxCount;
-				if ((t * holeCount)%1f < obstaclesPerRing) {
-					float angle = (j + offset) / (float)maxCount * (2f * Mathf.PI);
-					Obstacle obstacle = new Obstacle();
-					obstacle.position = new Vector2(mapSize * .5f + Mathf.Cos(angle) * ringRadius,mapSize * .5f + Mathf.Sin(angle) * ringRadius);
-					obstacle.radius = obstacleRadius;
-					output.Add(obstacle);
-					//Debug.DrawRay(obstacle.position / mapSize,-Vector3.forward * .05f,Color.green,10000f);
-				}
-			}
-		}
-
-		obstacleMatrices = new Matrix4x4[Mathf.CeilToInt((float)output.Count / instancesPerBatch)][];
-		for (int i=0;i<obstacleMatrices.Length;i++) {
-			obstacleMatrices[i] = new Matrix4x4[Mathf.Min(instancesPerBatch,output.Count - i * instancesPerBatch)];
-			for (int j=0;j<obstacleMatrices[i].Length;j++) {
-				obstacleMatrices[i][j] = Matrix4x4.TRS(output[i * instancesPerBatch + j].position / mapSize,Quaternion.identity,new Vector3(obstacleRadius*2f,obstacleRadius*2f,1f)/mapSize);
-			}
-		}
-
-		obstacles = output.ToArray();
-
-		List<Obstacle>[,] tempObstacleBuckets = new List<Obstacle>[bucketResolution,bucketResolution];
-
-		for (int x = 0; x < bucketResolution; x++) {
-			for (int y = 0; y < bucketResolution; y++) {
-				tempObstacleBuckets[x,y] = new List<Obstacle>();
-			}
-		}
-
-		for (int i = 0; i < obstacles.Length; i++) {
-			Vector2 pos = obstacles[i].position;
-			float radius = obstacles[i].radius;
-			for (int x = Mathf.FloorToInt((pos.x - radius)/mapSize*bucketResolution); x <= Mathf.FloorToInt((pos.x + radius)/mapSize*bucketResolution); x++) {
-				if (x < 0 || x >= bucketResolution) {
-					continue;
-				}
-				for (int y = Mathf.FloorToInt((pos.y - radius) / mapSize * bucketResolution); y <= Mathf.FloorToInt((pos.y + radius) / mapSize * bucketResolution); y++) {
-					if (y<0 || y>=bucketResolution) {
-						continue;
-					}
-					tempObstacleBuckets[x,y].Add(obstacles[i]);
-				}
-			}
-		}
-
-		obstacleBuckets = new Obstacle[bucketResolution,bucketResolution][];
-		for (int x = 0; x < bucketResolution; x++) {
-			for (int y = 0; y < bucketResolution; y++) {
-				obstacleBuckets[x,y] = tempObstacleBuckets[x,y].ToArray();
-			}
-		}
+	
+	// 生成障碍物
+	void GenerateObstacles() {	    // 初始化障碍物列表
+	    List<Obstacle> output = new List<Obstacle>();
+	    
+	    // 遍历每个障碍物环
+	    for (int i=1;i<=obstacleRingCount;i++) {
+	        // 计算当前环的半径
+	        float ringRadius = (i / (obstacleRingCount+1f)) * (mapSize * .5f);
+	        // 计算当前环的周长
+	        float circumference = ringRadius * 2f * Mathf.PI;
+	        // 计算当前环上障碍物的最大数量
+	        int maxCount = Mathf.CeilToInt(circumference / (2f * obstacleRadius) * 2f);
+	        // 生成一个随机偏移量，用于在环上错开障碍物的位置
+	        int offset = Random.Range(0,maxCount);
+	        // 随机决定当前环上的洞的数量
+	        int holeCount = Random.Range(1,3);
+	        
+	        // 遍历当前环上的每个可能的障碍物位置
+	        for (int j=0;j<maxCount;j++) {
+	            float t = (float)j / maxCount;
+	            // 根据洞的数量决定是否在当前位置放置障碍物
+	            if ((t * holeCount)%1f < obstaclesPerRing) {
+	                // 计算障碍物的角度位置
+	                float angle = (j + offset) / (float)maxCount * (2f * Mathf.PI);
+	                // 创建并初始化障碍物
+	                Obstacle obstacle = new Obstacle();
+	                // 设置障碍物的位置
+	                obstacle.position = new Vector2(mapSize * .5f + Mathf.Cos(angle) * ringRadius,mapSize * .5f + Mathf.Sin(angle) * ringRadius);
+	                // 设置障碍物的半径
+	                obstacle.radius = obstacleRadius;
+	                // 将障碍物添加到输出列表中
+	                output.Add(obstacle);
+	                //Debug.DrawRay(obstacle.position / mapSize,-Vector3.forward * .05f,Color.green,10000f);
+	            }
+	        }
+	    }
+	    
+	    // 初始化障碍物的矩阵数组，用于批量绘制
+	    obstacleMatrices = new Matrix4x4[Mathf.CeilToInt((float)output.Count / instancesPerBatch)][];
+	    // 为每个批量绘制的障碍物生成矩阵
+	    for (int i=0;i<obstacleMatrices.Length;i++) {
+	        obstacleMatrices[i] = new Matrix4x4[Mathf.Min(instancesPerBatch,output.Count - i * instancesPerBatch)];
+	        // 为当前批次的每个障碍物生成变换矩阵
+	        for (int j=0;j<obstacleMatrices[i].Length;j++) {
+	            obstacleMatrices[i][j] = Matrix4x4.TRS(output[i * instancesPerBatch + j].position / mapSize,Quaternion.identity,new Vector3(obstacleRadius*2f,obstacleRadius*2f,1f)/mapSize);
+	        }
+	    }
+	    
+	    // 将输出列表转换为数组
+	    obstacles = output.ToArray();
+	    
+	    // 初始化临时的障碍物桶，用于空间划分
+	    List<Obstacle>[,] tempObstacleBuckets = new List<Obstacle>[bucketResolution,bucketResolution];
+	    
+	    // 初始化每个桶
+	    for (int x = 0; x < bucketResolution; x++) {
+	        for (int y = 0; y < bucketResolution; y++) {
+	            tempObstacleBuckets[x,y] = new List<Obstacle>();
+	        }
+	    }
+	    
+	    // 将每个障碍物添加到相应的桶中
+	    for (int i = 0; i < obstacles.Length; i++) {
+	        Vector2 pos = obstacles[i].position;
+	        float radius = obstacles[i].radius;
+	        // 遍历障碍物影响的区域
+	        for (int x = Mathf.FloorToInt((pos.x - radius)/mapSize*bucketResolution); x <= Mathf.FloorToInt((pos.x + radius)/mapSize*bucketResolution); x++) {
+	            if (x < 0 || x >= bucketResolution) {
+	                continue;
+	            }
+	            for (int y = Mathf.FloorToInt((pos.y - radius) / mapSize * bucketResolution); y <= Mathf.FloorToInt((pos.y + radius) / mapSize * bucketResolution); y++) {
+	                if (y<0 || y>=bucketResolution) {
+	                    continue;
+	                }
+	                tempObstacleBuckets[x,y].Add(obstacles[i]);
+	            }
+	        }
+	    }
+	    
+	    // 初始化最终的障碍物桶数组
+	    obstacleBuckets = new Obstacle[bucketResolution,bucketResolution][];
+	    // 将临时障碍物桶转换为数组并赋值给最终的障碍物桶
+	    for (int x = 0; x < bucketResolution; x++) {
+	        for (int y = 0; y < bucketResolution; y++) {
+	            obstacleBuckets[x,y] = tempObstacleBuckets[x,y].ToArray();
+	        }
+	    }
 	}
-
+	
+	// 空障碍物桶
 	Obstacle[] emptyBucket = new Obstacle[0];
+	// 获取障碍物桶
 	Obstacle[] GetObstacleBucket(Vector2 pos) {
-		return GetObstacleBucket(pos.x,pos.y);
+	    return GetObstacleBucket(pos.x,pos.y);
 	}
 	Obstacle[] GetObstacleBucket(float posX, float posY) {
-		int x = (int)(posX / mapSize * bucketResolution);
-		int y = (int)(posY / mapSize * bucketResolution);
-		if (x<0 || y<0 || x>=bucketResolution || y>=bucketResolution) {
-			return emptyBucket;
-		} else {
-			return obstacleBuckets[x,y];
-		}
+	    int x = (int)(posX / mapSize * bucketResolution);
+	    int y = (int)(posY / mapSize * bucketResolution);
+	    if (x<0 || y<0 || x>=bucketResolution || y>=bucketResolution) {
+	        return emptyBucket;
+	    } else {
+	        return obstacleBuckets[x,y];
+	    }
 	}
-
 	void Start () {
 
 		GenerateObstacles();
