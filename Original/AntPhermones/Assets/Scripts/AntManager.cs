@@ -302,6 +302,7 @@ public class AntManager : MonoBehaviour {
 	}
 	void Start () {
 
+		// 生成障碍物，并把障碍物划分到对应的桶中
 		GenerateObstacles();
 
 		colonyPosition = Vector2.one * mapSize * .5f;
