@@ -1,7 +1,9 @@
+using ECS.Scripts.Job;
 using Unity.Burst;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Entities;
+using Unity.Jobs;
 using Unity.Mathematics;
 using Unity.Transforms;
 using UnityEngine;
@@ -220,8 +222,51 @@ namespace ECS.Scripts
 			float4 carryColor = new float4(mapSetting.ValueRO.carryColor.r, mapSetting.ValueRO.carryColor.g,
 				mapSetting.ValueRO.carryColor.b, 1);
 			var pheromones = SystemAPI.GetSingletonBuffer<Pheromone>();
+			var buckets = SystemAPI.GetSingletonBuffer<Bucket>();
 			if(pheromones.Length == 0)
 				return;
+
+			var antJob = new AntJob()
+			{
+				deltaTime = Time.deltaTime,
+				random = random,
+				mapSetting = mapSetting,
+				pheromones = pheromones,
+				buckets = buckets,
+				mapSize = mapSize,
+				randomSteering = randomSteering,
+				pheromoneSteerStrength = pheromoneSteerStrength,
+				wallSteerStrength = wallSteerStrength,
+				antAccel = antAccel,
+				goalSteerStrength = goalSteerStrength,
+				obstacleRadius = obstacleRadius,
+				outwardStrength = outwardStrength,
+				inwardStrength = inwardStrength,
+				antSpeed = antSpeed,
+				trailDecay = trailDecay,
+				resourcePosition = resourcePosition,
+				colonyPosition = colonyPosition,
+			};
+			var antJobHandle = antJob.ScheduleParallel(state.Dependency);
+			antJobHandle.Complete();
+			var pheromonesJos = new DropPheromonesJob()
+			{
+				deltaTime = Time.deltaTime,
+				pheromones = pheromones.AsNativeArray(),
+				mapSetting = mapSetting,
+			};
+			var pheromonesJosHandle = pheromonesJos.ScheduleParallel(antJobHandle);
+			pheromonesJosHandle.Complete();
+			state.Dependency = JobHandle.CombineDependencies(antJobHandle, pheromonesJosHandle);
+			
+			// 处理信息素衰减
+			var pheromoneDecayJob = new PheromoneDecayJob
+			{
+				trailDecay = mapSetting.ValueRO.trailDecay,
+				pheromones = pheromones.AsNativeArray(),
+			};
+			state.Dependency = pheromoneDecayJob.Schedule(pheromones.Length, 64, state.Dependency);
+			return;
 			foreach (var (localTransform, ant) in SystemAPI.Query<RefRW<LocalTransform>, RefRW<Ant>>())
 			{
 				//Debug.Log(
