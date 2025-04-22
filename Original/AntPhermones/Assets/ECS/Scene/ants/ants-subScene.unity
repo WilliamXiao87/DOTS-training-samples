@@ -177,12 +177,12 @@ MonoBehaviour:
   bucketResolution: 64
   searchColor: {r: 0.1882353, g: 0.21176471, b: 0.3529412, a: 0}
   carryColor: {r: 0.72156864, g: 0.70980394, b: 0.39607844, a: 0}
-  antCount: 1000
+  antCount: 10000
   antSize: {x: 0.008, y: 0.004, z: 0.004}
   antSpeed: 0.8
   antAccel: 0.2
   trailAddSpeed: 0.3
-  trailDecay: 0.9985
+  trailDecay: 1
   randomSteering: 0.14
   pheromoneSteerStrength: 0.015
   wallSteerStrength: 0.12

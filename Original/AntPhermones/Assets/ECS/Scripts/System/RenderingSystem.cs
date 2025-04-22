@@ -12,6 +12,8 @@ namespace ECS.Scripts
     [UpdateAfter(typeof(AntSpawnerSystem))]
     public partial struct RenderingSystem : ISystem, ISystemStartStop
     {
+        private static Texture2D texture;
+        
         [BurstCompile]
         public void OnCreate(ref SystemState state)
         {
@@ -24,8 +26,8 @@ namespace ECS.Scripts
             var gameObject = GameObject.Find("Ant Manager/Pheromone Renderer");
             var meshRenderer = gameObject.GetComponent<MeshRenderer>();
             var material = meshRenderer.material;
-            var texture2D = new Texture2D(mapSetting.ValueRO.mapSize,mapSetting.ValueRO.mapSize, TextureFormat.RFloat, false);
-            material.mainTexture = texture2D;
+            texture = new Texture2D(mapSetting.ValueRO.mapSize,mapSetting.ValueRO.mapSize, TextureFormat.RFloat, false);
+            material.mainTexture = texture;
         }
 
         public void OnStopRunning(ref SystemState state)
@@ -38,16 +40,16 @@ namespace ECS.Scripts
             var antRenderingJob = new AntRenderingJob();
             state.Dependency = antRenderingJob.Schedule(state.Dependency);
             
-            // 绘制信息素
+            /*// 绘制信息素
             var gameObject = GameObject.Find("Ant Manager/Pheromone Renderer");
             var meshRenderer = gameObject.GetComponent<MeshRenderer>();
             var material = meshRenderer.material;
-            var texture2D = material.mainTexture as Texture2D;
+            var texture2D = material.mainTexture as Texture2D;*/
 
             var pheromones = SystemAPI.GetSingletonBuffer<Pheromone>();
-            if (texture2D == null)
+            if (texture == null)
             {
-                Debug.LogError("texture2D is null");
+                Debug.LogError("texture is null");
                 return;
             }
 
@@ -57,8 +59,8 @@ namespace ECS.Scripts
                 return;
             }
 
-            texture2D.SetPixelData(pheromones.AsNativeArray(), 0, 0);
-            texture2D.Apply();
+            texture.SetPixelData(pheromones.AsNativeArray(), 0, 0);
+            texture.Apply();
         }
     }
     

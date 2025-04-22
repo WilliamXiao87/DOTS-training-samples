@@ -252,8 +252,9 @@ namespace ECS.Scripts
 			var pheromonesJos = new DropPheromonesJob()
 			{
 				deltaTime = Time.deltaTime,
+				mapSize = mapSetting.ValueRO.mapSize,
+				trailAddSpeed = mapSetting.ValueRO.trailAddSpeed,
 				pheromones = pheromones.AsNativeArray(),
-				mapSetting = mapSetting,
 			};
 			var pheromonesJosHandle = pheromonesJos.ScheduleParallel(antJobHandle);
 			pheromonesJosHandle.Complete();

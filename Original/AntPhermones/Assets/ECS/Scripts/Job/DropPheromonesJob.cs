@@ -12,13 +12,16 @@ namespace ECS.Scripts.Job
     public partial struct DropPheromonesJob :IJobEntity
     {
         public float deltaTime;
-        [NativeDisableUnsafePtrRestriction]public RefRW<MapSetting> mapSetting;
+        public int mapSize;
+
+        public float trailAddSpeed;
+        //[NativeDisableUnsafePtrRestriction]public RefRW<MapSetting> mapSetting;
         [NativeDisableParallelForRestriction]
         public NativeArray<Pheromone> pheromones;
         
         public void Execute(ref Ant ant)
         {
-            int mapSize = mapSetting.ValueRO.mapSize;
+            //int mapSize = mapSetting.ValueRO.mapSize;
             var position = ant.position;
             int x = Mathf.FloorToInt(position.x);
             int y = Mathf.FloorToInt(position.y);
@@ -37,7 +40,7 @@ namespace ECS.Scripts.Job
             int index = PheromoneIndex(x, y, mapSize);
             // 更新信息素浓度
             var pheromone = pheromones[index];
-            pheromone.Strength += (mapSetting.ValueRO.trailAddSpeed * excitement * deltaTime) *
+            pheromone.Strength += (trailAddSpeed * excitement * deltaTime) *
                                   (1f - pheromone.Strength);
             if (pheromone.Strength > 1f)
             {
